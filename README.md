@@ -4,7 +4,15 @@
 
 - Clone the repository  
  ``git clone https://https://github.com/glee1228/ServerAnalysisModule.git``
+ 
 - Install the required packages  
+ ```
+pip install opencv-python
+apt-get install -y libsm6 libxext6 libxrender-dev
+pip3 install ffmpeg-python
+apt-get install -y ffmpeg
+```
+
  ``pip install -r requirements.txt``
 - Download the official pre-trained weights from 
 [https://github.com/leoxiaobin/deep-high-resolution-net.pytorch](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch)  
