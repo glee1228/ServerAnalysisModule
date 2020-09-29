@@ -17,15 +17,16 @@ apt-get install -y ffmpeg
 ```
 
  ``pip install -r requirements.txt``
-- Download the official pre-trained weights from 
-[https://github.com/leoxiaobin/deep-high-resolution-net.pytorch](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch)  
-  Direct links ([official Drive folder](https://drive.google.com/drive/folders/1hOTihvbyIxsm5ygDpbUuJ7O_tzv4oXjC), [official OneDrive folder](https://1drv.ms/f/s!AhIXJn_J-blW231MH2krnmLq5kkQ)):
-  - COCO w48 384x288 (more accurate, but slower) - Used as default in `live_demo.py` and the other scripts  
-    [pose_hrnet_w48_384x288.pth](https://drive.google.com/open?id=1UoJhTtjHNByZSm96W3yFTfU5upJnsKiS)
-  - COCO w32 256x192 (less accurate, but faster)  
-    [pose_hrnet_w32_256x192.pth](https://drive.google.com/open?id=1zYC7go9EV0XaSlSBjMaiyE_4TcHc_S38)
-  - MPII w32 256x256 (MPII human joints)  
-    [pose_hrnet_w32_256x256.pth](https://drive.google.com/open?id=1_wn2ifmoQprBrFvUCDedjPON4Y6jsN-v)
+- Weight files are uploaded to the repository(folder `./weights`)
+  - For Downloading the official pre-trained weights from 
+  [https://github.com/leoxiaobin/deep-high-resolution-net.pytorch](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch)  
+    Direct links ([official Drive folder](https://drive.google.com/drive/folders/1hOTihvbyIxsm5ygDpbUuJ7O_tzv4oXjC), [official OneDrive folder](https://1drv.ms/f/s!AhIXJn_J-blW231MH2krnmLq5kkQ)):
+    - COCO w48 384x288 (more accurate, but slower) - Used as default in `live_demo.py` and the other scripts  
+      [pose_hrnet_w48_384x288.pth](https://drive.google.com/open?id=1UoJhTtjHNByZSm96W3yFTfU5upJnsKiS)
+    - COCO w32 256x192 (less accurate, but faster)  
+      [pose_hrnet_w32_256x192.pth](https://drive.google.com/open?id=1zYC7go9EV0XaSlSBjMaiyE_4TcHc_S38)
+    - MPII w32 256x256 (MPII human joints)  
+      [pose_hrnet_w32_256x256.pth](https://drive.google.com/open?id=1_wn2ifmoQprBrFvUCDedjPON4Y6jsN-v)
 
   Remember to set the parameters of SimpleHRNet accordingly.
 - For multi-person support: FasterRCNN (obstacle detection)
