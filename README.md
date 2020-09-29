@@ -2,7 +2,7 @@
 
 #### 설치 설명
 * python 3.6
-* torch 1.6
+* torch 1.5
 * torchvision 0.6.0
 
 - Clone the repository  
