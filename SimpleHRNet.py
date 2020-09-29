@@ -2,11 +2,13 @@ import cv2
 import numpy as np
 import torch
 from torchvision.transforms import transforms
+import os
 
 from models.hrnet import HRNet
 from models.poseresnet import PoseResNet
-from models.detectors.YOLOv3 import YOLOv3
-
+# from models.detectors.YOLOv3 import YOLOv3
+from models.detectors.FasterRCNN import FRCNN
+from PIL import Image
 
 class SimpleHRNet:
     """
@@ -24,12 +26,8 @@ class SimpleHRNet:
                  model_name='HRNet',
                  resolution=(384, 288),
                  interpolation=cv2.INTER_CUBIC,
-                 multiperson=True,
                  return_bounding_boxes=False,
                  max_batch_size=32,
-                 yolo_model_def="./models/detectors/yolo/config/yolov3.cfg",
-                 yolo_class_path="./models/detectors/yolo/data/coco.names",
-                 yolo_weights_path="./models/detectors/yolo/weights/yolov3.weights",
                  device=torch.device("cpu")):
         """
         Initializes a new SimpleHRNet object.
@@ -68,17 +66,21 @@ class SimpleHRNet:
 
         self.c = c
         self.nof_joints = nof_joints
+        self.detector_root = '/home/mmlab/CCTV_Server/models/detectors'
         self.checkpoint_path = checkpoint_path
         self.model_name = model_name
         self.resolution = resolution  # in the form (height, width) as in the original implementation
         self.interpolation = interpolation
-        self.multiperson = multiperson
         self.return_bounding_boxes = return_bounding_boxes
         self.max_batch_size = max_batch_size
-        self.yolo_model_def = yolo_model_def
-        self.yolo_class_path = yolo_class_path
-        self.yolo_weights_path = yolo_weights_path
+        self.tiny_yolo_model_def = os.path.join(self.detector_root,"yolo/config/yolov3-tiny.cfg")
+        self.tiny_yolo_weights_path= os.path.join(self.detector_root,"yolo/weights/yolov3-tiny.weights")
+        self.yolo_model_def = os.path.join(self.detector_root,"yolo/config/yolov3.cfg")
+        self.yolo_class_path = os.path.join(self.detector_root,"yolo/data/coco.names")
+        self.yolo_weights_path = os.path.join(self.detector_root,"yolo/weights/yolov3.weights")
+        self.faster_RCNN_weights_path = os.path.join(self.detector_root,"FasterRCNN/checkpoints/obstacleV2/model-90000.pth")
         self.device = device
+        self.previous_out_shape = None
 
         if model_name in ('HRNet', 'hrnet'):
             self.model = HRNet(c=c, nof_joints=nof_joints)
@@ -115,26 +117,23 @@ class SimpleHRNet:
         self.model = self.model.to(device)
         self.model.eval()
 
-        if not self.multiperson:
-            self.transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ])
-
-        else:
-            self.detector = YOLOv3(model_def=yolo_model_def,
-                                   class_path=yolo_class_path,
-                                   weights_path=yolo_weights_path,
-         ### Write down the name of the object class to detect. See /ROOT_DIR/models/detector/yolo/data/coco.names ##
-                                   classes=('person',),
-                                   max_batch_size=self.max_batch_size,
-                                   device=device)
-            self.transform = transforms.Compose([
-                transforms.ToPILImage(),
-                transforms.Resize((self.resolution[0], self.resolution[1])),  # (height, width)
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ])
+         #    self.detector = YOLOv3(model_def=self.yolo_model_def,
+         #                           class_path=self.yolo_class_path,
+         #                           weights_path=self.yolo_weights_path,
+         # ### Write down the name of the object class to detect. See /ROOT_DIR/models/detector/yolo/data/coco.names ##
+         #                           classes=('person',),
+         #                           max_batch_size=self.max_batch_size,
+         #                           device=device)
+        self.detector = FRCNN(self.faster_RCNN_weights_path,
+                                   dataset_name='obstacleV2',
+                                   backbone_name='resnet101',
+                                   prob_thresh=0.6)
+        self.transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((self.resolution[0], self.resolution[1])),  # (height, width)
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
     def predict(self, image):
         """
@@ -164,42 +163,42 @@ class SimpleHRNet:
 
                 If self.return_bounding_boxes, the class returns a list with (bounding boxes, human joints)
         """
+
         if len(image.shape) == 3:
             return self._predict_single(image)
-        elif len(image.shape) == 4:
-            return self._predict_batch(image)
         else:
             raise ValueError('Wrong image format.')
 
     def _predict_single(self, image):
-        if not self.multiperson:
-            old_res = image.shape
-            if self.resolution is not None:
-                image = cv2.resize(
-                    image,
-                    (self.resolution[1], self.resolution[0]),  # (width, height)
-                    interpolation=self.interpolation
-                )
+        image = Image.fromarray(image)
+        detections, intermediate_features = self.detector.predict_single(image)
+        detection_result = detections['results'][0]['detection_result']
 
-            images = self.transform(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)).unsqueeze(dim=0)
-            boxes = np.asarray([[0, 0, old_res[1], old_res[0]]], dtype=np.float32)  # [x1, y1, x2, y2]
+        exist_label = False
+        nof_people = 0
+        if len(detection_result) > 0 :
+            exist_label = True
+        if exist_label :
+            for result in detection_result:
+                if result['label'][0]['description']=='person':
+                    nof_people += 1
 
-        else:
-            detections,intermediate_features = self.detector.predict_single(image)
-            # print(detections)
-            nof_people = len(detections) if detections is not None else 0
-            boxes = np.empty((nof_people, 4), dtype=np.int32)
-            images = torch.empty((nof_people, 3, self.resolution[0], self.resolution[1]))  # (height, width)
-
-            if detections is not None:
-                for i, (x1, y1, x2, y2, conf, cls_conf, cls_pred) in enumerate(detections):
-                    x1 = int(round(x1.item()))
-                    x2 = int(round(x2.item()))
-                    y1 = int(round(y1.item()))
-                    y2 = int(round(y2.item()))
+        boxes = np.empty((nof_people, 4), dtype=np.int32)
+        images = torch.empty((nof_people, 3, self.resolution[0], self.resolution[1]))  # (height, width)
+        image = np.array(image)
+        if nof_people != 0:
+            for i, content in enumerate(detection_result):
+                description = content['label'][0]['description']
+                if description =='person':
+                    position = content['position']
+                    x1 = position['x']
+                    x2 = position['x']+position['w']
+                    y1 = position['y']
+                    y2 = position['y']+position['h']
 
                     # Adapt detections to match HRNet input aspect ratio (as suggested by xtyDoge in issue #14)
                     correction_factor = self.resolution[0] / self.resolution[1] * (x2 - x1) / (y2 - y1)
+
                     if correction_factor > 1:
                         # increase y side
                         center = y1 + (y2 - y1) // 2
@@ -212,11 +211,32 @@ class SimpleHRNet:
                         length = int(round((x2 - x1) * 1 / correction_factor))
                         x1 = max(0, center - length // 2)
                         x2 = min(image.shape[1], center + length // 2)
+                    # import pdb;pdb.set_trace()
 
+                    # ######## Margin Bbox for locking golf clubs ################
+                    # margin_w = int((x2-x1)/2)
+                    # margin_h = int((y2-y1)/2)
+                    # x2+=margin_w
+                    # y2+=margin_h
+                    # x1-=margin_w
+                    # y1-=margin_h
+                    # image_y,image_x,_ = image.shape
+                    #
+                    # if y2>image_y:
+                    #     y2=image_y
+                    # if y1<0:
+                    #     y1=0
+                    # if x2>image_x:
+                    #     x2=image_x
+                    # if x1<0:
+                    #     x1=0
+                    #
+                    # ######################################################
                     boxes[i] = [x1, y1, x2, y2]
-                    images[i] = self.transform(image[y1:y2, x1:x2, ::-1])
+                    images[i] = self.transform(image[y1:y2,x1:x2,  ::-1])
 
-        if images.shape[0] > 0:
+
+        if images.shape[0] > 0:  # HRNet inference when there is more than one person
             images = images.to(self.device)
 
             with torch.no_grad():
@@ -230,7 +250,7 @@ class SimpleHRNet:
                     )
                     for i in range(0, len(images), self.max_batch_size):
                         out[i:i + self.max_batch_size] = self.model(images[i:i + self.max_batch_size])
-
+            self.previous_out_shape = out.shape
             out = out.detach().cpu().numpy()
             pts = np.empty((out.shape[0], out.shape[1], 3), dtype=np.float32)
             # For each human, for each joint: y, x, confidence
@@ -248,129 +268,109 @@ class SimpleHRNet:
             pts = np.empty((0, 0, 3), dtype=np.float32)
 
         if self.return_bounding_boxes:
-            return boxes, pts
+            return boxes, pts, detections, intermediate_features
         else:
-            return pts,detections,intermediate_features
+            return pts, detections, intermediate_features
 
-    def _predict_batch(self, images):
-        if not self.multiperson:
-            old_res = images[0].shape
 
-            if self.resolution is not None:
-                images_tensor = torch.empty(images.shape[0], 3, self.resolution[0], self.resolution[1])
-            else:
-                images_tensor = torch.empty(images.shape[0], 3, images.shape[1], images.shape[2])
-
-            for i, image in enumerate(images):
-                if self.resolution is not None:
-                    image = cv2.resize(
-                        image,
-                        (self.resolution[1], self.resolution[0]),  # (width, height)
-                        interpolation=self.interpolation
-                    )
-
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-                images_tensor[i] = self.transform(image)
-
-            images = images_tensor
-            boxes = np.repeat(
-                np.asarray([[0, 0, old_res[1], old_res[0]]], dtype=np.float32), len(images), axis=0
-            )  # [x1, y1, x2, y2]
-
-        else:
-            image_detections,intermediate_features = self.detector.predict(images)
-
-            base_index = 0
-            nof_people = int(np.sum([len(d) for d in image_detections if d is not None]))
-
-            boxes = np.empty((nof_people, 4), dtype=np.int32)
-            images_tensor = torch.empty((nof_people, 3, self.resolution[0], self.resolution[1]))  # (height, width)
-
-            for d, detections in enumerate(image_detections):
-                image = images[d]
-                if detections is not None and len(detections) > 0:
-                    for i, (x1, y1, x2, y2, conf, cls_conf, cls_pred) in enumerate(detections):
-                        x1 = int(round(x1.item()))
-                        x2 = int(round(x2.item()))
-                        y1 = int(round(y1.item()))
-                        y2 = int(round(y2.item()))
-
-                        # Adapt detections to match HRNet input aspect ratio (as suggested by xtyDoge in issue #14)
-                        correction_factor = self.resolution[0] / self.resolution[1] * (x2 - x1) / (y2 - y1)
-                        if correction_factor > 1:
-                            # increase y side
-                            center = y1 + (y2 - y1) // 2
-                            length = int(round((y2 - y1) * correction_factor))
-                            y1 = max(0, center - length // 2)
-                            y2 = min(image.shape[0], center + length // 2)
-                        elif correction_factor < 1:
-                            # increase x side
-                            center = x1 + (x2 - x1) // 2
-                            length = int(round((x2 - x1) * 1 / correction_factor))
-                            x1 = max(0, center - length // 2)
-                            x2 = min(image.shape[1], center + length // 2)
-
-                        boxes[base_index + i] = [x1, y1, x2, y2]
-                        images_tensor[base_index + i] = self.transform(image[y1:y2, x1:x2, ::-1])
-
-                    base_index += len(detections)
-
-            images = images_tensor
-
-        images = images.to(self.device)
-
-        if images.shape[0] > 0:
-            with torch.no_grad():
-                if len(images) <= self.max_batch_size:
-                    out = self.model(images)
-
-                else:
-                    out = torch.empty(
-                        (images.shape[0], self.nof_joints, self.resolution[0] // 4, self.resolution[1] // 4),
-                        device=self.device
-                    )
-                    for i in range(0, len(images), self.max_batch_size):
-                        out[i:i + self.max_batch_size] = self.model(images[i:i + self.max_batch_size])
-
-            out = out.detach().cpu().numpy()
-            pts = np.empty((out.shape[0], out.shape[1], 3), dtype=np.float32)
-            # For each human, for each joint: y, x, confidence
-            for i, human in enumerate(out):
-                for j, joint in enumerate(human):
-                    pt = np.unravel_index(np.argmax(joint), (self.resolution[0] // 4, self.resolution[1] // 4))
-                    # 0: pt_y / (height // 4) * (bb_y2 - bb_y1) + bb_y1
-                    # 1: pt_x / (width // 4) * (bb_x2 - bb_x1) + bb_x1
-                    # 2: confidences
-                    pts[i, j, 0] = pt[0] * 1. / (self.resolution[0] // 4) * (boxes[i][3] - boxes[i][1]) + boxes[i][1]
-                    pts[i, j, 1] = pt[1] * 1. / (self.resolution[1] // 4) * (boxes[i][2] - boxes[i][0]) + boxes[i][0]
-                    pts[i, j, 2] = joint[pt]
-
-            if self.multiperson:
-                # re-add the removed batch axis (n)
-                pts_batch = []
-                index = 0
-                for detections in image_detections:
-                    if detections is not None:
-                        pts_batch.append(pts[index:index + len(detections)])
-                        index += len(detections)
-                    else:
-                        pts_batch.append(np.zeros((0, self.nof_joints, 3), dtype=np.float32))
-                pts = pts_batch
-
-            else:
-                pts = np.expand_dims(pts, axis=1)
-
-        else:
-            boxes = np.asarray([], dtype=np.int32)
-            if self.multiperson:
-                pts = []
-                for _ in range(len(image_detections)):
-                    pts.append(np.zeros((0, self.nof_joints, 3), dtype=np.float32))
-            else:
-                raise ValueError  # should never happen
-
-        if self.return_bounding_boxes:
-            return boxes, pts
-        else:
-            return pts,image_detections,intermediate_features
+    # def _predict_batch(self, image_batch, scale_batch):
+    #     # images = Image.fromarray(images)
+    #     detections, intermediate_features = self.detector.predict_batch(image_batch,scale_batch)
+    #     detection_result = detections['results'][0]['detection_result']
+    #
+    #     exist_label = False
+    #     nof_people = 0
+    #     if len(detection_result) > 0:
+    #         exist_label = True
+    #     if exist_label:
+    #         for result in detection_result:
+    #             if result['label'][0]['description'] == 'person':
+    #                 nof_people += 1
+    #
+    #     boxes = np.empty((nof_people, 4), dtype=np.int32)
+    #     images = torch.empty((nof_people, 3, self.resolution[0], self.resolution[1]))  # (height, width)
+    #     image = np.array(image)
+    #     if nof_people != 0:
+    #         for i, content in enumerate(detection_result):
+    #             description = content['label'][0]['description']
+    #             if description == 'person':
+    #                 position = content['position']
+    #                 x1 = position['x']
+    #                 x2 = position['x'] + position['w']
+    #                 y1 = position['y']
+    #                 y2 = position['y'] + position['h']
+    #
+    #                 # Adapt detections to match HRNet input aspect ratio (as suggested by xtyDoge in issue #14)
+    #                 correction_factor = self.resolution[0] / self.resolution[1] * (x2 - x1) / (y2 - y1)
+    #
+    #                 if correction_factor > 1:
+    #                     # increase y side
+    #                     center = y1 + (y2 - y1) // 2
+    #                     length = int(round((y2 - y1) * correction_factor))
+    #                     y1 = max(0, center - length // 2)
+    #                     y2 = min(image.shape[0], center + length // 2)
+    #                 elif correction_factor < 1:
+    #                     # increase x side
+    #                     center = x1 + (x2 - x1) // 2
+    #                     length = int(round((x2 - x1) * 1 / correction_factor))
+    #                     x1 = max(0, center - length // 2)
+    #                     x2 = min(image.shape[1], center + length // 2)
+    #                 # import pdb;pdb.set_trace()
+    #
+    #                 # ######## Margin Bbox for locking golf clubs ################
+    #                 # margin_w = int((x2-x1)/2)
+    #                 # margin_h = int((y2-y1)/2)
+    #                 # x2+=margin_w
+    #                 # y2+=margin_h
+    #                 # x1-=margin_w
+    #                 # y1-=margin_h
+    #                 # image_y,image_x,_ = image.shape
+    #                 #
+    #                 # if y2>image_y:
+    #                 #     y2=image_y
+    #                 # if y1<0:
+    #                 #     y1=0
+    #                 # if x2>image_x:
+    #                 #     x2=image_x
+    #                 # if x1<0:
+    #                 #     x1=0
+    #                 #
+    #                 # ######################################################
+    #                 boxes[i] = [x1, y1, x2, y2]
+    #                 images[i] = self.transform(image[y1:y2, x1:x2, ::-1])
+    #
+    #     if images.shape[0] > 0:  # HRNet inference when there is more than one person
+    #         images = images.to(self.device)
+    #
+    #         with torch.no_grad():
+    #             if len(images) <= self.max_batch_size:
+    #                 out = self.model(images)
+    #
+    #             else:
+    #                 out = torch.empty(
+    #                     (images.shape[0], self.nof_joints, self.resolution[0] // 4, self.resolution[1] // 4),
+    #                     device=self.device
+    #                 )
+    #                 for i in range(0, len(images), self.max_batch_size):
+    #                     out[i:i + self.max_batch_size] = self.model(images[i:i + self.max_batch_size])
+    #         self.previous_out_shape = out.shape
+    #         out = out.detach().cpu().numpy()
+    #         pts = np.empty((out.shape[0], out.shape[1], 3), dtype=np.float32)
+    #         # For each human, for each joint: y, x, confidence
+    #         for i, human in enumerate(out):
+    #             for j, joint in enumerate(human):
+    #                 pt = np.unravel_index(np.argmax(joint), (self.resolution[0] // 4, self.resolution[1] // 4))
+    #                 # 0: pt_y / (height // 4) * (bb_y2 - bb_y1) + bb_y1
+    #                 # 1: pt_x / (width // 4) * (bb_x2 - bb_x1) + bb_x1
+    #                 # 2: confidences
+    #                 pts[i, j, 0] = pt[0] * 1. / (self.resolution[0] // 4) * (boxes[i][3] - boxes[i][1]) + boxes[i][1]
+    #                 pts[i, j, 1] = pt[1] * 1. / (self.resolution[1] // 4) * (boxes[i][2] - boxes[i][0]) + boxes[i][0]
+    #                 pts[i, j, 2] = joint[pt]
+    #
+    #     else:
+    #         pts = np.empty((0, 0, 3), dtype=np.float32)
+    #
+    #     if self.return_bounding_boxes:
+    #         return boxes, pts, detections, intermediate_features
+    #     else:
+    #         return pts, detections, intermediate_features
