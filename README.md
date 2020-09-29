@@ -75,7 +75,7 @@ apt-get install -y ffmpeg
     │  └── detectors            (people detectors)
     |    └── FasterRCNN         (FasterRCNN repository)
     │      ├── ...
-    │      └── weights          (FasterRCNN weights)
+    │      └── checkpoints          (FasterRCNN weights)
     │    └── yolo               (PyTorch-YOLOv3 repository)
     │      ├── ...
     │      └── weights          (YOLOv3 weights)
