@@ -1,6 +1,9 @@
 # ServerAnalysisModule
 
 #### 설치 설명
+* python 3.6
+* torch 1.6
+* torchvision 0.6.0
 
 - Clone the repository  
  ``git clone https://https://github.com/glee1228/ServerAnalysisModule.git``
@@ -25,10 +28,37 @@ apt-get install -y ffmpeg
     [pose_hrnet_w32_256x256.pth](https://drive.google.com/open?id=1_wn2ifmoQprBrFvUCDedjPON4Y6jsN-v)
 
   Remember to set the parameters of SimpleHRNet accordingly.
-- For multi-person support: YOLOv3
-    - Install YOLOv3 required packages  
-       ``pip install -r requirements.txt`` (from folder `./models/detectors/yolo`)
-    - Download the pre-trained weights running the script ``download_weights.sh`` from the ``weights`` folder
+- For multi-person support: FasterRCNN (obstacle detection)
+    - Install FasterRCNN required packages (Included in above requirements.txt)
+    - Weight files are uploaded to the repository(folder `./models/detectors/FasterRCNN/checkpoints
+    - Build `Non Maximum Suppression` and `ROI Align` modules (modified from [facebookresearch/maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark))
+    1. Install(`from folder ./models/detectors/FasterRCNN`)
+
+     ```
+     $ python support/setup.py develop
+     ```
+
+    2. Uninstall
+
+     ```
+     $ python support/setup.py develop --uninstall
+     ```
+
+    3. Test
+
+     ```
+     $ python test/nms/test_nms.py
+     ```
+
+     * Result
+
+       ![](models/detectors/FasterRCNN/images/test_nms.png?raw=true)
+       
+     * more details
+     
+     [potterhsu/easy-faster-rcnn.pytorch](https://github.com/potterhsu/easy-faster-rcnn.pytorch)
+     
+     
 - (Optional) Download the [COCO dataset](http://cocodataset.org/#download) and save it in ``./datasets/COCO``
 - Your folders should look like:
     ```
@@ -41,6 +71,8 @@ apt-get install -y ffmpeg
     ├── models                  (pytorch models)
     │  └── detectors            (people detectors)
     |    └── FasterRCNN         (FasterRCNN repository)
+    │      ├── ...
+    │      └── weights          (FasterRCNN weights)
     │    └── yolo               (PyTorch-YOLOv3 repository)
     │      ├── ...
     │      └── weights          (YOLOv3 weights)
