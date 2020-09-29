@@ -30,8 +30,11 @@ apt-get install -y ffmpeg
   Remember to set the parameters of SimpleHRNet accordingly.
 - For multi-person support: FasterRCNN (obstacle detection)
     - Install FasterRCNN required packages (Included in above requirements.txt)
-    - Weight files are uploaded to the repository(folder `./models/detectors/FasterRCNN/checkpoints
+    
+    - Weight files are uploaded to the repository(folder `./models/detectors/FasterRCNN/checkpoints`)
+    
     - Build `Non Maximum Suppression` and `ROI Align` modules (modified from [facebookresearch/maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark))
+    
     1. Install(`from folder ./models/detectors/FasterRCNN`)
 
      ```
