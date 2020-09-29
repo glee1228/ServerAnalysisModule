@@ -40,6 +40,7 @@ apt-get install -y ffmpeg
     │  └── nms                  (CUDA nms module - for training only)
     ├── models                  (pytorch models)
     │  └── detectors            (people detectors)
+    |    └── FasterRCNN         (FasterRCNN repository)
     │    └── yolo               (PyTorch-YOLOv3 repository)
     │      ├── ...
     │      └── weights          (YOLOv3 weights)
