@@ -71,29 +71,13 @@ joints = model.predict(image)
 
 From a connected camera:
 ```
-python scripts/live-demo.py --camera_id 0
+python scripts/live_demo.py --camera_id 0
 ```
 From a saved video:
 ```
-python scripts/live-demo.py --filename video.mp4
+python scripts/live_demo.py --filename clip1_1.mp4
 ```
 
-For help:
-```
-python scripts/live-demo.py --help
-```
-
-#### keypoint 추출
-
-From a saved video:
-```
-python scripts/extract-keypoints.py --filename video.mp4
-```
-
-For help:
-```
-python scripts/extract-keypoints.py --help
-```
 
 #### 학습 script 실행
 
@@ -107,6 +91,7 @@ python scripts/train_coco.py --help
 ```
     
 #### CCTV Module을 위한 Object Detection, Pose Estimation, Feature Extraction 전체 코드 실행
+
 ```
-python main.py
+python infer.py
 ```
