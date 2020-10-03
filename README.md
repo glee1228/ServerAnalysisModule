@@ -112,7 +112,7 @@ python scripts/live_demo.py --camera_id 0
 ```
 From a saved video:
 ```
-python scripts/live_demo.py --filename clip1_1.mp4
+python scripts/live_demo.py --filename clip1_1.avi
 ```
 
 
@@ -130,5 +130,5 @@ python scripts/train_coco.py --help
 #### CCTV Module을 위한 Object Detection, Pose Estimation, Feature Extraction 전체 코드 실행
 
 ```
-python infer.py --filename clip1_1.mp4
+python infer.py --filename clip1_1.avi
 ```
